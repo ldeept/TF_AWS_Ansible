@@ -9,3 +9,47 @@
       yum:
         name: git
         state: present
+
+    - name: Check if Splunk is installed
+      stat:
+        path: "/opt/splunk/bin/splunk"
+        follow: yes
+      register: splunkd_path
+
+    - name: Download Splunk package
+      get_url:
+        url: https://www.splunk.com/bin/splunk/DownloadActivityServlet?architecture=x86_64&platform=linux&version=8.1.0.1&product=splunk&filename=splunk-8.1.0.1-24fd52428b5a-linux-2.6-x86_64.rpm&wget=true
+        dest: /opt
+        mode: 0777 
+      when: splunkd_path.stat.exists == false
+      ignore_errors: true
+
+
+    - name: Install Splunk
+      shell: rpm -iv /opt/splunk-8.1.0.1-24fd52428b5a-linux-2.6-x86_64.rpm
+      when: splunkd_path.stat.exists == false
+      ignore_errors: true
+
+    - name: Copying user-seed file
+      copy:
+        src: /home/cloud_user/TF_AWS_Ansible/user-seed.conf
+        dest: /opt/splunk/etc/system/local
+      when: splunkd_path.stat.exists == false
+            ignore_errors: true
+ 
+    - name: Starting Splunk
+      shell: /opt/splunk/bin/splunk start --accept-license --answer-yes
+      when: splunkd_path.stat.exists == false
+      ignore_errors: true
+
+    - name: Checking Splunk status and version
+      shell: |
+        /opt/splunk/bin/splunk status
+        /opt/splunk/bin/splunk version
+      register: splunk_check_output
+
+    - debug:
+        var: splunk_check_output
+
+    - name: Building Splunk Indexer Cluster Master
+      shell: /opt/splunk/bin/splunk edit cluster-config -mode master -replication_port 9887 -secret <secret> -auth admin:<password>
